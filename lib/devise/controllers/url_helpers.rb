@@ -53,7 +53,7 @@ module Devise
                     begin
                       _devise_route_context.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
                     rescue
-                      _devise_default_route_context.default_router_name.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
+                      _devise_default_route_context.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
                     end
                   end
                 end
