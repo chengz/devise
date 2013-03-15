@@ -47,7 +47,15 @@ module Devise
               class_eval <<-URL_HELPERS, __FILE__, __LINE__ + 1
                 def #{method}(resource_or_scope, *args)
                   scope = Devise::Mapping.find_scope!(resource_or_scope)
-                  _devise_route_context.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
+                  if Devise.router_name.blank?
+                    _devise_route_context.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
+                  else
+                    begin
+                      _devise_route_context.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
+                    rescue
+                      Devise.default_router_name.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
+                    end
+                  end
                 end
               URL_HELPERS
             end

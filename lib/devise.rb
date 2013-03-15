@@ -282,8 +282,12 @@ module Devise
     end
   end
 
+  def self.default_router_name
+    :main_app
+  end
+
   def self.available_router_name
-    router_name || :main_app
+    router_name || default_router_name
   end
 
   def self.omniauth_providers
