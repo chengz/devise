@@ -187,7 +187,7 @@ module Devise
         if respond_to?(home_path, true)
           send(home_path)
         elsif respond_to?(:root_path)
-          root_path
+          main_app.root_path
         else
           "/"
         end
@@ -231,7 +231,7 @@ module Devise
       #
       # By default it is the root_path.
       def after_sign_out_path_for(resource_or_scope)
-        respond_to?(:root_path) ? root_path : "/"
+        respond_to?(:root_path) ? main_app.root_path : "/"
       end
 
       # Sign in a user and tries to redirect first to the stored location and
