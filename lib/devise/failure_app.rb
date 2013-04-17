@@ -86,7 +86,7 @@ module Devise
 
     def scope_path
       opts  = {}
-      route = :"new_#{scope}_session_path"
+      route = :"main_app.new_#{scope}_session_path"
       opts[:format] = request_format unless skip_format?
 
       config = Rails.application.config
