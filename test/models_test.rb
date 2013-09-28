@@ -83,7 +83,12 @@ class ActiveRecordTest < ActiveSupport::TestCase
   end
 
   test 'set null fields on migrations' do
-    Admin.create!
+    # Ignore email sending since no email exists.
+    klass = Class.new(Admin) do
+      def send_devise_notification(*); end
+    end
+
+    klass.create!
   end
 end
 
@@ -134,25 +139,6 @@ class CheckFieldsTest < ActiveSupport::TestCase
 
     assert_raise_with_message Devise::Models::MissingAttribute, "The following attribute(s) is (are) missing on your model: encrypted_password, email" do
       Devise::Models.check_fields!(Magician)
-    end
-  end
-
-  test "doesn't raise a NoMethodError exception when the module doesn't have a required_field(klass) class method" do
-    driver = Class.new do
-      extend Devise::Models
-
-      def self.before_validation(instance)
-      end
-
-      attr_accessor :encrypted_password, :email
-
-      devise :database_authenticatable
-    end
-
-    swap_module_method_existence Devise::Models::DatabaseAuthenticatable, :required_fields do
-      assert_deprecated do
-        Devise::Models.check_fields!(driver)
-      end
     end
   end
 end

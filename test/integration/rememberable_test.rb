@@ -26,12 +26,12 @@ class RememberMeTest < ActionDispatch::IntegrationTest
   end
 
   test 'do not remember the user if he has not checked remember me option' do
-    user = sign_in_as_user
+    sign_in_as_user
     assert_nil request.cookies["remember_user_cookie"]
   end
 
-  test 'handles unverified requests gets rid of caches' do
-    swap UsersController, :allow_forgery_protection => true do
+  test 'handle unverified requests gets rid of caches' do
+    swap ApplicationController, :allow_forgery_protection => true do
       post exhibit_user_url(1)
       assert_not warden.authenticated?(:user)
 
@@ -42,9 +42,21 @@ class RememberMeTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'handle unverified requests does not create cookies on sign in' do
+    swap ApplicationController, :allow_forgery_protection => true do
+      get new_user_session_path
+      assert request.session[:_csrf_token]
+
+      post user_session_path, :authenticity_token => "oops", :user =>
+           { email: "jose.valim@gmail.com", password: "123456", :remember_me => "1" }
+      assert_not warden.authenticated?(:user)
+      assert_not request.cookies['remember_user_token']
+    end
+  end
+
   test 'generate remember token after sign in' do
-    user = sign_in_as_user :remember_me => true
-    assert request.cookies["remember_user_token"]
+    sign_in_as_user :remember_me => true
+    assert request.cookies['remember_user_token']
   end
 
   test 'generate remember token after sign in setting cookie options' do
@@ -52,14 +64,14 @@ class RememberMeTest < ActionDispatch::IntegrationTest
     # since we changed the domain. This is the only difference with the
     # previous test.
     swap Devise, :rememberable_options => { :domain => "omg.somewhere.com" } do
-      user = sign_in_as_user :remember_me => true
+      sign_in_as_user :remember_me => true
       assert_nil request.cookies["remember_user_token"]
     end
   end
 
   test 'generate remember token with a custom key' do
     swap Devise, :rememberable_options => { :key => "v1lat_token" } do
-      user = sign_in_as_user :remember_me => true
+      sign_in_as_user :remember_me => true
       assert request.cookies["v1lat_token"]
     end
   end
@@ -67,7 +79,7 @@ class RememberMeTest < ActionDispatch::IntegrationTest
   test 'generate remember token after sign in setting session options' do
     begin
       Rails.configuration.session_options[:domain] = "omg.somewhere.com"
-      user = sign_in_as_user :remember_me => true
+      sign_in_as_user :remember_me => true
       assert_nil request.cookies["remember_user_token"]
     ensure
       Rails.configuration.session_options.delete(:domain)
@@ -84,20 +96,10 @@ class RememberMeTest < ActionDispatch::IntegrationTest
   end
 
   test 'remember the user before sign up and redirect him to his home' do
-    user = create_user_and_remember
+    create_user_and_remember
     get new_user_registration_path
     assert warden.authenticated?(:user)
     assert_redirected_to root_path
-  end
-
-  test 'cookies are destroyed on unverified requests' do
-    swap ApplicationController, :allow_forgery_protection => true do
-      user = create_user_and_remember
-      get users_path
-      assert warden.authenticated?(:user)
-      post root_path, :authenticity_token => 'INVALID'
-      assert_not warden.authenticated?(:user)
-    end
   end
 
   test 'does not extend remember period through sign in' do
@@ -117,7 +119,7 @@ class RememberMeTest < ActionDispatch::IntegrationTest
   end
 
   test 'do not remember other scopes' do
-    user = create_user_and_remember
+    create_user_and_remember
     get root_path
     assert_response :success
     assert warden.authenticated?(:user)
@@ -125,14 +127,14 @@ class RememberMeTest < ActionDispatch::IntegrationTest
   end
 
   test 'do not remember with invalid token' do
-    user = create_user_and_remember('add')
+    create_user_and_remember('add')
     get users_path
     assert_not warden.authenticated?(:user)
     assert_redirected_to new_user_session_path
   end
 
   test 'do not remember with expired token' do
-    user = create_user_and_remember
+    create_user_and_remember
     swap Devise, :remember_for => 0 do
       get users_path
       assert_not warden.authenticated?(:user)
@@ -141,7 +143,7 @@ class RememberMeTest < ActionDispatch::IntegrationTest
   end
 
   test 'do not remember the user anymore after forget' do
-    user = create_user_and_remember
+    create_user_and_remember
     get users_path
     assert warden.authenticated?(:user)
 

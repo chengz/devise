@@ -46,6 +46,11 @@ class ConfirmationInstructionsTest < ActionMailer::TestCase
     assert_equal ['custom@example.com'], mail.from
   end
 
+  test 'setup sender from custom mailer defaults with proc' do
+    Devise.mailer = 'Users::FromProcMailer'
+    assert_equal ['custom@example.com'], mail.from
+  end
+
   test 'custom mailer renders parent mailer template' do
     Devise.mailer = 'Users::Mailer'
     assert_not_blank mail.body.encoded
@@ -79,8 +84,12 @@ class ConfirmationInstructionsTest < ActionMailer::TestCase
 
   test 'body should have link to confirm the account' do
     host = ActionMailer::Base.default_url_options[:host]
-    confirmation_url_regexp = %r{<a href=\"http://#{host}/users/confirmation\?confirmation_token=#{user.confirmation_token}">}
-    assert_match confirmation_url_regexp, mail.body.encoded
+
+    if mail.body.encoded =~ %r{<a href=\"http://#{host}/users/confirmation\?confirmation_token=([^"]+)">}
+      assert_equal Devise.token_generator.digest(user.class, :confirmation_token, $1), user.confirmation_token
+    else
+      flunk "expected confirmation url regex to match"
+    end
   end
 
   test 'renders a scoped if scoped_views is set to true' do

@@ -80,6 +80,17 @@ module Devise
         is_a?(DeviseController)
       end
 
+      # Setup a param sanitizer to filter parameters using strong_parameters. See
+      # lib/devise/parameter_sanitizer.rb for more info. Override this
+      # method in your application controller to use your own parameter sanitizer.
+      def devise_parameter_sanitizer
+        @devise_parameter_sanitizer ||= if defined?(ActionController::StrongParameters)
+          Devise::ParameterSanitizer.new(resource_class, resource_name, params)
+        else
+          Devise::BaseSanitizer.new(resource_class, resource_name, params)
+        end
+      end
+
       # Tell warden that params authentication is allowed for that specific page.
       def allow_params_authentication!
         request.env["devise.allow_params_authentication"] = true
@@ -106,6 +117,7 @@ module Devise
       #   sign_in :user, @user                      # sign_in(scope, resource)
       #   sign_in @user                             # sign_in(resource)
       #   sign_in @user, :event => :authentication  # sign_in(resource, options)
+      #   sign_in @user, :store => false            # sign_in(resource, options)
       #   sign_in @user, :bypass => true            # sign_in(resource, options)
       #
       def sign_in(resource_or_scope, *args)

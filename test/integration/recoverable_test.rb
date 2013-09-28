@@ -14,12 +14,16 @@ class PasswordTest < ActionDispatch::IntegrationTest
 
     fill_in 'email', :with => 'user@test.com'
     yield if block_given?
+
+    Devise.stubs(:friendly_token).returns("abcdef")
     click_button 'Send me reset password instructions'
   end
 
   def reset_password(options={}, &block)
-    visit edit_user_password_path(:reset_password_token => options[:reset_password_token]) unless options[:visit] == false
-    assert_response :success
+    unless options[:visit] == false
+      visit edit_user_password_path(:reset_password_token => options[:reset_password_token] || "abcdef")
+      assert_response :success
+    end
 
     fill_in 'New password', :with => '987654321'
     fill_in 'Confirm new password', :with => '987654321'
@@ -45,7 +49,10 @@ class PasswordTest < ActionDispatch::IntegrationTest
     request_forgot_password do
       fill_in 'email', :with => 'foo@bar.com'
     end
-    assert_equal ['custom@example.com'], ActionMailer::Base.deliveries.last.from
+
+    mail = ActionMailer::Base.deliveries.last
+    assert_equal ['custom@example.com'], mail.from
+    assert_match edit_user_password_path(reset_password_token: 'abcdef'), mail.body.encoded
   end
 
   test 'reset password with email of different case should fail when email is NOT the list of case insensitive keys' do
@@ -146,21 +153,22 @@ class PasswordTest < ActionDispatch::IntegrationTest
   test 'not authenticated user with valid reset password token but invalid password should not be able to change his password' do
     user = create_user
     request_forgot_password
-    reset_password :reset_password_token => user.reload.reset_password_token do
+    reset_password do
       fill_in 'Confirm new password', :with => 'other_password'
     end
 
     assert_response :success
     assert_current_url '/users/password'
     assert_have_selector '#error_explanation'
-    assert_contain 'Password doesn\'t match confirmation'
+    assert_contain Devise.rails4? ?
+      "Password confirmation doesn't match Password" : "Password doesn't match confirmation"
     assert_not user.reload.valid_password?('987654321')
   end
 
   test 'not authenticated user with valid data should be able to change his password' do
     user = create_user
     request_forgot_password
-    reset_password :reset_password_token => user.reload.reset_password_token
+    reset_password
 
     assert_current_url '/'
     assert_contain 'Your password was changed successfully. You are now signed in.'
@@ -170,22 +178,21 @@ class PasswordTest < ActionDispatch::IntegrationTest
   test 'after entering invalid data user should still be able to change his password' do
     user = create_user
     request_forgot_password
-    reset_password :reset_password_token => user.reload.reset_password_token do
-      fill_in 'Confirm new password', :with => 'other_password'
-    end
+
+    reset_password {  fill_in 'Confirm new password', :with => 'other_password' }
     assert_response :success
     assert_have_selector '#error_explanation'
     assert_not user.reload.valid_password?('987654321')
 
-    reset_password :reset_password_token => user.reload.reset_password_token, :visit => false
+    reset_password :visit => false
     assert_contain 'Your password was changed successfully.'
     assert user.reload.valid_password?('987654321')
   end
 
   test 'sign in user automatically after changing its password' do
-    user = create_user
+    create_user
     request_forgot_password
-    reset_password :reset_password_token => user.reload.reset_password_token
+    reset_password
 
     assert warden.authenticated?(:user)
   end
@@ -195,7 +202,7 @@ class PasswordTest < ActionDispatch::IntegrationTest
       swap Devise, :unlock_strategy => strategy do
         user = create_user(:locked => true)
         request_forgot_password
-        reset_password :reset_password_token => user.reload.reset_password_token
+        reset_password
 
         assert_contain 'Your password was changed successfully.'
         assert_not_contain 'You are now signed in.'
@@ -209,7 +216,7 @@ class PasswordTest < ActionDispatch::IntegrationTest
     swap Devise, :unlock_strategy => :email do
       user = create_user(:locked => true)
       request_forgot_password
-      reset_password :reset_password_token => user.reload.reset_password_token
+      reset_password
 
       assert_contain 'Your password was changed successfully.'
       assert !user.reload.access_locked?
@@ -221,21 +228,12 @@ class PasswordTest < ActionDispatch::IntegrationTest
     swap Devise, :unlock_strategy => :both do
       user = create_user(:locked => true)
       request_forgot_password
-      reset_password :reset_password_token => user.reload.reset_password_token
+      reset_password
 
       assert_contain 'Your password was changed successfully.'
       assert !user.reload.access_locked?
       assert warden.authenticated?(:user)
     end
-  end
-
-  test 'sign in user automatically and confirm after changing its password if it\'s not confirmed' do
-    user = create_user(:confirm => false)
-    request_forgot_password
-    reset_password :reset_password_token => user.reload.reset_password_token
-
-    assert warden.authenticated?(:user)
-    assert user.reload.confirmed?
   end
 
   test 'reset password request with valid E-Mail in XML format should return valid response' do
@@ -262,15 +260,17 @@ class PasswordTest < ActionDispatch::IntegrationTest
   end
 
   test 'change password with valid parameters in XML format should return valid response' do
-    user = create_user
+    create_user
     request_forgot_password
-    put user_password_path(:format => 'xml'), :user => {:reset_password_token => user.reload.reset_password_token, :password => '987654321', :password_confirmation => '987654321'}
+    put user_password_path(:format => 'xml'), :user => {
+      :reset_password_token => 'abcdef', :password => '987654321', :password_confirmation => '987654321'
+    }
     assert_response :success
     assert warden.authenticated?(:user)
   end
 
   test 'change password with invalid token in XML format should return invalid response' do
-    user = create_user
+    create_user
     request_forgot_password
     put user_password_path(:format => 'xml'), :user => {:reset_password_token => 'invalid.token', :password => '987654321', :password_confirmation => '987654321'}
     assert_response :unprocessable_entity
@@ -325,7 +325,7 @@ class PasswordTest < ActionDispatch::IntegrationTest
 
     assert_equal 10, user.failed_attempts
     request_forgot_password
-    reset_password :reset_password_token => user.reload.reset_password_token
+    reset_password
 
     assert warden.authenticated?(:user)
     user.reload

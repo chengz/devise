@@ -2,7 +2,7 @@ require 'test_helper'
 
 class HttpAuthenticationTest < ActionDispatch::IntegrationTest
   test 'handles unverified requests gets rid of caches but continues signed in' do
-    swap UsersController, :allow_forgery_protection => true do
+    swap ApplicationController, :allow_forgery_protection => true do
       create_user
       post exhibit_user_url(1), {}, "HTTP_AUTHORIZATION" => "Basic #{Base64.encode64("user@test.com:12345678")}"
       assert warden.authenticated?(:user)
@@ -63,7 +63,7 @@ class HttpAuthenticationTest < ActionDispatch::IntegrationTest
   end
 
   test 'it uses appropriate authentication_keys when configured with hash' do
-    swap Devise, :authentication_keys => { :username => false, :email => false } do
+    swap Devise, :authentication_keys => ActiveSupport::OrderedHash[:username, false, :email, false] do
       sign_in_as_new_user_with_http("usertest")
       assert_response :success
       assert_match '<email>user@test.com</email>', response.body
@@ -72,7 +72,7 @@ class HttpAuthenticationTest < ActionDispatch::IntegrationTest
   end
 
   test 'it uses the appropriate key when configured explicitly' do
-    swap Devise, :authentication_keys => { :email => false, :username => false }, :http_auth_key => :username do
+    swap Devise, :authentication_keys => ActiveSupport::OrderedHash[:email, false, :username, false], :http_authentication_key => :username do
       sign_in_as_new_user_with_http("usertest")
       assert_response :success
       assert_match '<email>user@test.com</email>', response.body
@@ -86,16 +86,6 @@ class HttpAuthenticationTest < ActionDispatch::IntegrationTest
       assert_equal 401, status
       assert_equal 'Basic realm="Application"', headers["WWW-Authenticate"]
     end
-  end
-
-  test 'sign in should authenticate with really long token' do
-    token = "token_containing_so_many_characters_that_the_base64_encoding_will_wrap"
-    user = create_user
-    user.update_attribute :authentication_token, token
-    get users_path(:format => :xml), {}, "HTTP_AUTHORIZATION" => "Basic #{Base64.encode64("#{token}:x")}"
-    assert_response :success
-    assert_match "<email>user@test.com</email>", response.body
-    assert warden.authenticated?(:user)
   end
 
   private

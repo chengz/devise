@@ -35,12 +35,6 @@ module Devise
           :template_name => action
         }.merge(opts)
 
-        if resource.respond_to?(:headers_for)
-          ActiveSupport::Deprecation.warn "Calling headers_for in the model is no longer supported. " <<
-            "Please customize your mailer instead."
-          headers.merge!(resource.headers_for(action))
-        end
-
         @email = headers[:to]
         headers
       end
@@ -54,8 +48,9 @@ module Devise
       end
 
       def mailer_sender(mapping, sender = :from)
-        if default_params[sender].present?
-          default_params[sender]
+        default_sender = default_params[sender]
+        if default_sender.present?
+          default_sender.respond_to?(:to_proc) ? instance_eval(&default_sender) : default_sender
         elsif Devise.mailer_sender.is_a?(Proc)
           Devise.mailer_sender.call(mapping.name)
         else
@@ -69,7 +64,7 @@ module Devise
         template_path
       end
 
-      # Setup a subject doing an I18n lookup. At first, it attemps to set a subject
+      # Setup a subject doing an I18n lookup. At first, it attempts to set a subject
       # based on the current mapping:
       #
       #   en:

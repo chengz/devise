@@ -80,7 +80,8 @@ module ActionDispatch::Routing
     #  * :path_names => configure different path names to overwrite defaults :sign_in, :sign_out, :sign_up,
     #    :password, :confirmation, :unlock.
     #
-    #      devise_for :users, :path_names => { :sign_in => 'login', :sign_out => 'logout', :password => 'secret', :confirmation => 'verification' }
+    #      devise_for :users, :path_names => { :sign_in => 'login', :sign_out => 'logout',
+    #        :password => 'secret', :confirmation => 'verification', registration: 'register }
     #
     #  * :controllers => the controller which should be used. All routes by default points to Devise controllers.
     #    However, if you want them to point to custom controller, you should do:
@@ -191,6 +192,7 @@ module ActionDispatch::Routing
     #
     def devise_for(*resources)
       @devise_finalized = false
+      raise_no_secret_key unless Devise.secret_key
       options = resources.extract_options!
 
       options[:as]          ||= @scope[:as]     if @scope[:as].present?
@@ -222,14 +224,6 @@ module ActionDispatch::Routing
         routes  = mapping.used_routes
 
         devise_scope mapping.name do
-          if block_given?
-            ActiveSupport::Deprecation.warn "Passing a block to devise_for is deprecated. " \
-              "Please remove the block from devise_for (only the block, the call to " \
-              "devise_for must still exist) and call devise_scope :#{mapping.name} do ... end " \
-              "with the block instead", caller
-            yield
-          end
-
           with_devise_exclusive_scope mapping.fullpath, mapping.name, options do
             routes.each { |mod| send("devise_#{mod}", mapping, mapping.controllers) }
           end
@@ -250,15 +244,11 @@ module ActionDispatch::Routing
     #   end
     #
     #   authenticate :user, lambda {|u| u.role == "admin"} do
-    #     root :to => "admin/dashboard#show"
+    #     root :to => "admin/dashboard#show", :as => :user_root
     #   end
     #
     def authenticate(scope=nil, block=nil)
-      constraint = lambda do |request|
-        request.env["warden"].authenticate!(:scope => scope) && (block.nil? || block.call(request.env["warden"].user(scope)))
-      end
-
-      constraints(constraint) do
+      constraints_for(:authenticate!, scope, block) do
         yield
       end
     end
@@ -268,25 +258,21 @@ module ActionDispatch::Routing
     # a model and allows extra constraints to be done on the instance.
     #
     #   authenticated :admin do
-    #     root :to => 'admin/dashboard#show'
+    #     root :to => 'admin/dashboard#show', :as => :admin_root
     #   end
     #
     #   authenticated do
-    #     root :to => 'dashboard#show'
+    #     root :to => 'dashboard#show', :as => :authenticated_root
     #   end
     #
     #   authenticated :user, lambda {|u| u.role == "admin"} do
-    #     root :to => "admin/dashboard#show"
+    #     root :to => "admin/dashboard#show", :as => :user_root
     #   end
     #
     #   root :to => 'landing#show'
     #
     def authenticated(scope=nil, block=nil)
-      constraint = lambda do |request|
-        request.env["warden"].authenticate?(:scope => scope) && (block.nil? || block.call(request.env["warden"].user(scope)))
-      end
-
-      constraints(constraint) do
+      constraints_for(:authenticate?, scope, block) do
         yield
       end
     end
@@ -428,6 +414,17 @@ module ActionDispatch::Routing
         @scope.merge!(old)
       end
 
+      def constraints_for(method_to_apply, scope=nil, block=nil)
+        constraint = lambda do |request|
+          request.env['warden'].send(method_to_apply, :scope => scope) &&
+            (block.nil? || block.call(request.env["warden"].user(scope)))
+        end
+
+        constraints(constraint) do
+          yield
+        end
+      end
+
       def set_omniauth_path_prefix!(path_prefix) #:nodoc:
         if ::OmniAuth.config.path_prefix && ::OmniAuth.config.path_prefix != path_prefix
           raise "Wrong OmniAuth configuration. If you are getting this exception, it means that either:\n\n" \
@@ -437,6 +434,15 @@ module ActionDispatch::Routing
         else
           ::OmniAuth.config.path_prefix = path_prefix
         end
+      end
+
+      def raise_no_secret_key #:nodoc:
+        raise <<-ERROR
+Devise.secret_key was not set. Please add the following to your Devise initializer:
+
+  config.secret_key = '#{SecureRandom.hex(64)}'
+
+ERROR
       end
 
       def raise_no_devise_method_error!(klass) #:nodoc:

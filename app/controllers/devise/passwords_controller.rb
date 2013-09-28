@@ -5,7 +5,7 @@ class Devise::PasswordsController < DeviseController
 
   # GET /resource/password/new
   def new
-    build_resource({})
+    self.resource = resource_class.new
   end
 
   # POST /resource/password
@@ -34,23 +34,26 @@ class Devise::PasswordsController < DeviseController
       flash_message = resource.active_for_authentication? ? :updated : :updated_not_active
       set_flash_message(:notice, flash_message) if is_navigational_format?
       sign_in(resource_name, resource)
-      respond_with resource, :location => after_sign_in_path_for(resource)
+      respond_with resource, :location => after_resetting_password_path_for(resource)
     else
       respond_with resource
     end
   end
 
   protected
+    def after_resetting_password_path_for(resource)
+      after_sign_in_path_for(resource)
+    end
 
     # The path used after sending reset password instructions
     def after_sending_reset_password_instructions_path_for(resource_name)
-      new_session_path(resource_name)
+      new_session_path(resource_name) if is_navigational_format?
     end
 
     # Check if a reset_password_token is provided in the request
     def assert_reset_token_passed
       if params[:reset_password_token].blank?
-        set_flash_message(:error, :no_token)
+        set_flash_message(:alert, :no_token)
         redirect_to new_session_path(resource_name)
       end
     end

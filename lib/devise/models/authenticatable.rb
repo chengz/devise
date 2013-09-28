@@ -1,4 +1,5 @@
 require 'devise/hooks/activatable'
+require 'devise/hooks/csrf_cleaner'
 
 module Devise
   module Models
@@ -10,7 +11,7 @@ module Devise
     #
     #   * +authentication_keys+: parameters used for authentication. By default [:email].
     #
-    #   * +http_auth_key+: map the username passed via HTTP Auth to this parameter. Defaults to
+    #   * +http_authentication_key+: map the username passed via HTTP Auth to this parameter. Defaults to
     #     the first element in +authentication_keys+.
     #
     #   * +request_keys+: parameters from the request object used for authentication.
@@ -18,24 +19,22 @@ module Devise
     #     passed to find_for_authentication method and considered in your model lookup.
     #
     #     For instance, if you set :request_keys to [:subdomain], :subdomain will be considered
-    #     as key on authentication. This can also be a hash where the value is a boolean expliciting
+    #     as key on authentication. This can also be a hash where the value is a boolean specifying
     #     if the value is required or not.
     #
-    #   * +http_authenticatable+: if this model allows http authentication. By default true.
+    #   * +http_authenticatable+: if this model allows http authentication. By default false.
     #     It also accepts an array specifying the strategies that should allow http.
     #
     #   * +params_authenticatable+: if this model allows authentication through request params. By default true.
     #     It also accepts an array specifying the strategies that should allow params authentication.
     #
     #   * +skip_session_storage+: By default Devise will store the user in session.
-    #     You can skip storage for http and token auth by appending values to array:
-    #     :skip_session_storage => [:token_auth] or :skip_session_storage => [:http_auth, :token_auth],
-    #     by default is set to :skip_session_storage => [:http_auth].
+    #     By default is set to :skip_session_storage => [:http_auth].
     #
     # == active_for_authentication?
     #
     # After authenticating a user and in each request, Devise checks if your model is active by
-    # calling model.active_for_authentication?. This method is overwriten by other devise modules. For instance,
+    # calling model.active_for_authentication?. This method is overwritten by other devise modules. For instance,
     # :confirmable overwrites .active_for_authentication? to only return true if your model was confirmed.
     #
     # You overwrite this method yourself, but if you do, don't forget to call super:
@@ -143,20 +142,20 @@ module Devise
       #
       #       protected
       #
-      #       def send_devise_notification(notification, opts = {})
-      #         # if the record is new or changed then delay the
+      #       def send_devise_notification(notification, *args)
+      #         # If the record is new or changed then delay the
       #         # delivery until the after_commit callback otherwise
       #         # send now because after_commit will not be called.
       #         if new_record? || changed?
-      #           pending_notifications << [notification, opts]
+      #           pending_notifications << [notification, args]
       #         else
-      #           devise_mailer.send(notification, self, opts).deliver
+      #           devise_mailer.send(notification, self, *args).deliver
       #         end
       #       end
       #
       #       def send_pending_notifications
-      #         pending_notifications.each do |n, opts|
-      #           devise_mailer.send(n, self, opts).deliver
+      #         pending_notifications.each do |notification, args|
+      #           devise_mailer.send(notification, self, *args).deliver
       #         end
       #
       #         # Empty the pending notifications array because the
@@ -170,8 +169,8 @@ module Devise
       #       end
       #     end
       #
-      def send_devise_notification(notification, opts={})
-        devise_mailer.send(notification, self, opts).deliver
+      def send_devise_notification(notification, *args)
+        devise_mailer.send(notification, self, *args).deliver
       end
 
       def downcase_keys
@@ -198,7 +197,7 @@ module Devise
       module ClassMethods
         Devise::Models.config(self, :authentication_keys, :request_keys, :strip_whitespace_keys,
           :case_insensitive_keys, :http_authenticatable, :params_authenticatable, :skip_session_storage,
-          :http_auth_key)
+          :http_authentication_key)
 
         def serialize_into_session(record)
           [record.to_key, record.authenticatable_salt]
@@ -243,7 +242,7 @@ module Devise
         end
 
         def find_first_by_auth_conditions(tainted_conditions, opts={})
-          to_adapter.find_first(devise_param_filter.filter(tainted_conditions).merge(opts))
+          to_adapter.find_first(devise_parameter_filter.filter(tainted_conditions).merge(opts))
         end
 
         # Find an initialize a record setting an error if it can't be found.
@@ -275,16 +274,8 @@ module Devise
 
         protected
 
-        def devise_param_filter
-          @devise_param_filter ||= Devise::ParamFilter.new(case_insensitive_keys, strip_whitespace_keys)
-        end
-
-        # Generate a token by looping and ensuring does not already exist.
-        def generate_token(column)
-          loop do
-            token = Devise.friendly_token
-            break token unless to_adapter.find_first({ column => token })
-          end
+        def devise_parameter_filter
+          @devise_parameter_filter ||= Devise::ParameterFilter.new(case_insensitive_keys, strip_whitespace_keys)
         end
       end
     end

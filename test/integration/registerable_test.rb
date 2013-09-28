@@ -17,7 +17,7 @@ class RegistrationTest < ActionDispatch::IntegrationTest
     assert warden.authenticated?(:admin)
     assert_current_url "/admin_area/home"
 
-    admin = Admin.last :order => "id"
+    admin = Admin.order(:id).last
     assert_equal admin.email, 'new_user@test.com'
   end
 
@@ -56,7 +56,7 @@ class RegistrationTest < ActionDispatch::IntegrationTest
 
     assert_not warden.authenticated?(:user)
 
-    user = User.last :order => "id"
+    user = User.order(:id).last
     assert_equal user.email, 'new_user@test.com'
     assert_not user.confirmed?
   end
@@ -100,7 +100,8 @@ class RegistrationTest < ActionDispatch::IntegrationTest
     assert_template 'registrations/new'
     assert_have_selector '#error_explanation'
     assert_contain "Email is invalid"
-    assert_contain "Password doesn't match confirmation"
+    assert_contain Devise.rails4? ?
+      "Password confirmation doesn't match Password" : "Password doesn't match confirmation"
     assert_contain "2 errors prohibited"
     assert_nil User.first
 
@@ -112,7 +113,7 @@ class RegistrationTest < ActionDispatch::IntegrationTest
     #    https://github.com/mongoid/mongoid/issues/756
     (pending "Fails on Mongoid < 2.1"; break) if defined?(Mongoid) && Mongoid::VERSION.to_f < 2.1
 
-    user = create_user
+    create_user
     get new_user_registration_path
 
     fill_in 'email', :with => 'user@test.com'
@@ -206,7 +207,8 @@ class RegistrationTest < ActionDispatch::IntegrationTest
     fill_in 'current password', :with => '12345678'
     click_button 'Update'
 
-    assert_contain "Password doesn't match confirmation"
+    assert_contain Devise.rails4? ?
+      "Password confirmation doesn't match Password" : "Password doesn't match confirmation"
     assert_not User.first.valid_password?('pas123')
   end
 
@@ -251,7 +253,7 @@ class RegistrationTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert response.body.include? %(<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<admin>)
 
-    admin = Admin.last :order => "id"
+    admin = Admin.order(:id).last
     assert_equal admin.email, 'new_user@test.com'
   end
 
@@ -260,7 +262,7 @@ class RegistrationTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert response.body.include? %(<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<user>)
 
-    user = User.last :order => "id"
+    user = User.order(:id).last
     assert_equal user.email, 'new_user@test.com'
   end
 
@@ -285,7 +287,7 @@ class RegistrationTest < ActionDispatch::IntegrationTest
   end
 
   test 'a user cancel his account in XML format should return valid response' do
-    user = sign_in_as_user
+    sign_in_as_user
     delete user_registration_path(:format => 'xml')
     assert_response :success
     assert_equal User.count, 0

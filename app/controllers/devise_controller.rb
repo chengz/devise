@@ -28,10 +28,6 @@ class DeviseController < Devise.parent_controller.constantize
     devise_mapping.to
   end
 
-  def resource_params
-    params[resource_name]
-  end
-
   # Returns a signed in resource from session (if one exists)
   def signed_in_resource
     warden.authenticate(:scope => resource_name)
@@ -93,23 +89,6 @@ MESSAGE
     instance_variable_set(:"@#{resource_name}", new_resource)
   end
 
-  # Build a devise resource.
-  # Assignment bypasses attribute protection when :unsafe option is passed
-  def build_resource(hash = nil, options = {})
-    hash ||= resource_params || {}
-
-    if options[:unsafe]
-      self.resource = resource_class.new.tap do |resource|
-        hash.each do |key, value|
-          setter = :"#{key}="
-          resource.send(setter, value) if resource.respond_to?(setter)
-        end
-      end
-    else
-      self.resource = resource_class.new(hash)
-    end
-  end
-
   # Helper for use in before_filters where no authentication is required.
   #
   # Example:
@@ -163,13 +142,18 @@ MESSAGE
   #
   # Please refer to README or en.yml locale file to check what messages are
   # available.
-  def set_flash_message(key, kind, options={})
+  def set_flash_message(key, kind, options = {})
+    message = find_message(kind, options)
+    flash[key] = message if message.present?
+  end
+
+  # Get message for given
+  def find_message(kind, options = {})
     options[:scope] = "devise.#{controller_name}"
     options[:default] = Array(options[:default]).unshift(kind.to_sym)
     options[:resource_name] = resource_name
     options = devise_i18n_options(options) if respond_to?(:devise_i18n_options, true)
-    message = I18n.t("#{options[:resource_name]}.#{kind}", options)
-    flash[key] = message if message.present?
+    I18n.t("#{options[:resource_name]}.#{kind}", options)
   end
 
   def clean_up_passwords(object)
@@ -180,5 +164,9 @@ MESSAGE
     respond_with(*args) do |format|
       format.any(*navigational_formats, &block)
     end
+  end
+
+  def resource_params
+    params.fetch(resource_name, {})
   end
 end

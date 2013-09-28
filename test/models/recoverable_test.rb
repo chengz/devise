@@ -108,11 +108,11 @@ class RecoverableTest < ActiveSupport::TestCase
     end
   end
 
-  test 'should find a user to reset his password based on reset_password_token' do
+  test 'should find a user to reset his password based on the raw token' do
     user = create_user
-    user.send :generate_reset_password_token!
+    raw  = user.send_reset_password_instructions
 
-    reset_password_user = User.reset_password_by_token(:reset_password_token => user.reset_password_token)
+    reset_password_user = User.reset_password_by_token(:reset_password_token => raw)
     assert_equal reset_password_user, user
   end
 
@@ -130,9 +130,9 @@ class RecoverableTest < ActiveSupport::TestCase
 
   test 'should return a new record with errors if password is blank' do
     user = create_user
-    user.send :generate_reset_password_token!
+    raw  = user.send_reset_password_instructions
 
-    reset_password_user = User.reset_password_by_token(:reset_password_token => user.reset_password_token, :password => '')
+    reset_password_user = User.reset_password_by_token(:reset_password_token => raw, :password => '')
     assert_not reset_password_user.errors.empty?
     assert_match "can't be blank", reset_password_user.errors[:password].join
   end
@@ -140,10 +140,10 @@ class RecoverableTest < ActiveSupport::TestCase
   test 'should reset successfully user password given the new password and confirmation' do
     user = create_user
     old_password = user.password
-    user.send :generate_reset_password_token!
+    raw  = user.send_reset_password_instructions
 
     User.reset_password_by_token(
-      :reset_password_token => user.reset_password_token,
+      :reset_password_token => raw,
       :password => 'new_password',
       :password_confirmation => 'new_password'
     )
@@ -153,38 +153,17 @@ class RecoverableTest < ActiveSupport::TestCase
     assert user.valid_password?('new_password')
   end
 
-  test 'should not reset reset password token during reset_password_within time' do
-    swap Devise, :reset_password_within => 1.hour do
-      user = create_user
-      user.send_reset_password_instructions
-      3.times do
-        token = user.reset_password_token
-        user.send_reset_password_instructions
-        assert_equal token, user.reset_password_token
-      end
-    end
-  end
-
-  test 'should reset reset password token after reset_password_within time' do
-    swap Devise, :reset_password_within => 1.hour do
-      user = create_user
-      user.reset_password_sent_at = 2.days.ago
-      token = user.reset_password_token
-      user.send_reset_password_instructions
-      assert_not_equal token, user.reset_password_token
-    end
-  end
-
   test 'should not reset password after reset_password_within time' do
     swap Devise, :reset_password_within => 1.hour do
       user = create_user
+      raw  = user.send_reset_password_instructions
+
       old_password = user.password
-      user.send :generate_reset_password_token!
       user.reset_password_sent_at = 2.days.ago
       user.save!
 
       reset_password_user = User.reset_password_by_token(
-        :reset_password_token => user.reset_password_token,
+        :reset_password_token => raw,
         :password => 'new_password',
         :password_confirmation => 'new_password'
       )
@@ -201,5 +180,5 @@ class RecoverableTest < ActiveSupport::TestCase
       :reset_password_sent_at,
       :reset_password_token
     ]
-  end
+  end  
 end

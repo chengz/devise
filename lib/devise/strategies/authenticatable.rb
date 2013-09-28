@@ -26,19 +26,7 @@ module Devise
       # In case the resource can't be validated, it will fail with the given
       # unauthenticated_message.
       def validate(resource, &block)
-        unless resource
-          ActiveSupport::Deprecation.warn "an empty resource was given to #{self.class.name}#validate. " \
-            "Please ensure the resource is not nil", caller
-        end
-
         result = resource && resource.valid_for_authentication?(&block)
-
-        case result
-        when Symbol, String
-          ActiveSupport::Deprecation.warn "valid_for_authentication? should return a boolean value"
-          fail!(result)
-          return false
-        end
 
         if result
           decorate(resource)
@@ -100,7 +88,7 @@ module Devise
 
       # Extract a hash with attributes:values from the http params.
       def http_auth_hash
-        keys = [http_auth_key, :password]
+        keys = [http_authentication_key, :password]
         Hash[*keys.zip(decode_credentials).flatten]
       end
 
@@ -134,32 +122,27 @@ module Devise
         parse_authentication_key_values(request_values, request_keys)
       end
 
-      # Holds the authentication keys.
       def authentication_keys
         @authentication_keys ||= mapping.to.authentication_keys
       end
 
-      def http_auth_key
-        @http_auth_key ||= mapping.to.http_auth_key
-        @http_auth_key ||= case authentication_keys
+      def http_authentication_key
+        @http_authentication_key ||= mapping.to.http_authentication_key || case authentication_keys
           when Array then authentication_keys.first
           when Hash then authentication_keys.keys.first
         end
       end
 
-      # Holds request keys.
       def request_keys
         @request_keys ||= mapping.to.request_keys
       end
 
-      # Returns values from the request object.
       def request_values
         keys = request_keys.respond_to?(:keys) ? request_keys.keys : request_keys
         values = keys.map { |k| self.request.send(k) }
         Hash[keys.zip(values)]
       end
 
-      # Parse authentication keys considering if they should be enforced or not.
       def parse_authentication_key_values(hash, keys)
         keys.each do |key, enforce|
           value = hash[key].presence

@@ -38,7 +38,6 @@ module Devise
         self.locked_at = Time.now.utc
 
         if unlock_strategy_enabled?(:email)
-          generate_unlock_token!
           send_unlock_instructions
         else
           save(:validate => false)
@@ -55,16 +54,20 @@ module Devise
 
       # Verifies whether a user is locked or not.
       def access_locked?
-        locked_at && !lock_expired?
+        !!locked_at && !lock_expired?
       end
 
       # Send unlock instructions by email
       def send_unlock_instructions
-        send_devise_notification(:unlock_instructions)
+        raw, enc = Devise.token_generator.generate(self.class, :unlock_token)
+        self.unlock_token = enc
+        self.save(:validate => false)
+        send_devise_notification(:unlock_instructions, raw, {})
+        raw
       end
 
       # Resend the unlock instructions if the user is locked.
-      def resend_unlock_token
+      def resend_unlock_instructions
         if_access_locked { send_unlock_instructions }
       end
 
@@ -122,15 +125,6 @@ module Devise
           self.failed_attempts > self.class.maximum_attempts
         end
 
-        # Generates unlock token
-        def generate_unlock_token
-          self.unlock_token = self.class.unlock_token
-        end
-
-        def generate_unlock_token!
-          generate_unlock_token && save(:validate => false)
-        end
-
         # Tells if the lock is expired if :time unlock strategy is active
         def lock_expired?
           if unlock_strategy_enabled?(:time)
@@ -146,19 +140,19 @@ module Devise
           if access_locked?
             yield
           else
-            self.errors.add(:email, :not_locked)
+            self.errors.add(Devise.unlock_keys.first, :not_locked)
             false
           end
         end
 
       module ClassMethods
-        # Attempt to find a user by its email. If a record is found, send new
+        # Attempt to find a user by its unlock keys. If a record is found, send new
         # unlock instructions to it. If not user is found, returns a new user
         # with an email not found error.
-        # Options must contain the user email
+        # Options must contain the user's unlock keys
         def send_unlock_instructions(attributes={})
           lockable = find_or_initialize_with_errors(unlock_keys, attributes, :not_found)
-          lockable.resend_unlock_token if lockable.persisted?
+          lockable.resend_unlock_instructions if lockable.persisted?
           lockable
         end
 
@@ -167,8 +161,12 @@ module Devise
         # If the user is not locked, creates an error for the user
         # Options must have the unlock_token
         def unlock_access_by_token(unlock_token)
+          original_token = unlock_token
+          unlock_token   = Devise.token_generator.digest(self, :unlock_token, unlock_token)
+
           lockable = find_or_initialize_with_error_by(:unlock_token, unlock_token)
           lockable.unlock_access! if lockable.persisted?
+          lockable.unlock_token = original_token
           lockable
         end
 
@@ -180,10 +178,6 @@ module Devise
         # Is the lock enabled for the given lock strategy?
         def lock_strategy_enabled?(strategy)
           self.lock_strategy == strategy
-        end
-
-        def unlock_token
-          Devise.friendly_token
         end
 
         Devise::Models.config(self, :maximum_attempts, :lock_strategy, :unlock_strategy, :unlock_in, :unlock_keys)

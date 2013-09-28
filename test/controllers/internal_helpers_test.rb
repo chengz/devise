@@ -34,10 +34,20 @@ class HelpersTest < ActionController::TestCase
   end
 
   test 'get resource params from request params using resource name as key' do
-    user_params = {'name' => 'Shirley Templar'}
-    @controller.stubs(:params).returns(HashWithIndifferentAccess.new({'user' => user_params}))
+    user_params = {'email' => 'shirley@templar.com'}
 
-    assert_equal user_params, @controller.resource_params
+    params = if Devise.rails4?
+      # Stub controller name so strong parameters can filter properly.
+      # DeviseController does not allow any parameters by default.
+      @controller.stubs(:controller_name).returns(:sessions_controller)
+
+      ActionController::Parameters.new({'user' => user_params})
+    else
+      HashWithIndifferentAccess.new({'user' => user_params})
+    end
+    @controller.stubs(:params).returns(params)
+
+    assert_equal user_params, @controller.send(:resource_params)
   end
 
   test 'resources methods are not controller actions' do
@@ -45,7 +55,7 @@ class HelpersTest < ActionController::TestCase
   end
 
   test 'require no authentication tests current mapping' do
-    @mock_warden.expects(:authenticate?).with(:rememberable, :token_authenticatable, :scope => :user).returns(true)
+    @mock_warden.expects(:authenticate?).with(:rememberable, :scope => :user).returns(true)
     @mock_warden.expects(:user).with(:user).returns(User.new)
     @controller.expects(:redirect_to).with(root_path)
     @controller.send :require_no_authentication
@@ -61,7 +71,7 @@ class HelpersTest < ActionController::TestCase
   end
 
   test 'require no authentication sets a flash message' do
-    @mock_warden.expects(:authenticate?).with(:rememberable, :token_authenticatable, :scope => :user).returns(true)
+    @mock_warden.expects(:authenticate?).with(:rememberable, :scope => :user).returns(true)
     @mock_warden.expects(:user).with(:user).returns(User.new)
     @controller.expects(:redirect_to).with(root_path)
     @controller.send :require_no_authentication

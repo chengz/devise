@@ -63,29 +63,8 @@ class ActiveSupport::TestCase
   def clear_cached_variables(options)
     if options.key?(:case_insensitive_keys) || options.key?(:strip_whitespace_keys)
       Devise.mappings.each do |_, mapping|
-        mapping.to.instance_variable_set(:@devise_param_filter, nil)
+        mapping.to.instance_variable_set(:@devise_parameter_filter, nil)
       end
-    end
-  end
-
-  def swap_module_method_existence(klass, method)
-    klass.module_eval %Q[
-      class << self
-        alias #{method}_referenced #{method}
-        undef #{method}
-      end
-    ]
-
-    begin
-      yield if block_given?
-    ensure
-
-      klass.module_eval %Q[
-        class << self
-          alias #{method} #{method}_referenced
-          undef #{method}_referenced
-        end
-      ]
     end
   end
 end

@@ -81,7 +81,7 @@ module Devise
       #
       # Example:
       #
-      #   def update_without_password(params={})
+      #   def update_without_password(params, *options)
       #     params.delete(:email)
       #     super(params)
       #   end
@@ -92,6 +92,21 @@ module Devise
 
         result = update_attributes(params, *options)
         clean_up_passwords
+        result
+      end
+
+      # Destroy record when :current_password matches, otherwise returns
+      # error on :current_password. It also automatically rejects 
+      # :current_password if it is blank.
+      def destroy_with_password(current_password)
+        result = if valid_password?(current_password)
+          destroy
+        else
+          self.valid?
+          self.errors.add(:current_password, current_password.blank? ? :blank : :invalid)
+          false
+        end
+
         result
       end
 

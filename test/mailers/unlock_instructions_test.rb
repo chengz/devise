@@ -49,6 +49,11 @@ class UnlockInstructionsTest < ActionMailer::TestCase
     assert_equal ['custom@example.com'], mail.from
   end
 
+  test 'setup sender from custom mailer defaults with proc' do
+    Devise.mailer = 'Users::FromProcMailer'
+    assert_equal ['custom@example.com'], mail.from
+  end
+
   test 'custom mailer renders parent mailer template' do
     Devise.mailer = 'Users::Mailer'
     assert_not_blank mail.body.encoded
@@ -76,7 +81,11 @@ class UnlockInstructionsTest < ActionMailer::TestCase
 
   test 'body should have link to unlock the account' do
     host = ActionMailer::Base.default_url_options[:host]
-    unlock_url_regexp = %r{<a href=\"http://#{host}/users/unlock\?unlock_token=#{user.unlock_token}">}
-    assert_match unlock_url_regexp, mail.body.encoded
+
+    if mail.body.encoded =~ %r{<a href=\"http://#{host}/users/unlock\?unlock_token=([^"]+)">}
+      assert_equal Devise.token_generator.digest(user.class, :unlock_token, $1), user.unlock_token
+    else
+      flunk "expected unlock url regex to match"
+    end
   end
 end
